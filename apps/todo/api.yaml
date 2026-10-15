@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: todo-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: todo-api }
+  strategy:
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }   # deploy sem indisponibilidade
+  template:
+    metadata:
+      labels: { app: todo-api }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000          # o usuário node da imagem; precisa ser numérico
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: api
+          image: todo-api        # o Kustomize troca pelo nome e tag reais
+          envFrom:
+            - configMapRef: { name: todo-config }
+          env:
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: mysql-credentials, key: password } }
+          ports:
+            - { name: http, containerPort: 3000 }
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: todo-api
+  labels: { app: todo-api }
+spec:
+  selector: { app: todo-api }
+  ports:
+    - { name: http, port: 80, targetPort: http }

@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: todo
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/SEU_USUARIO/todo-gitops.git
+    targetRevision: main
+    path: apps/todo
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: todo
+  syncPolicy:
+    automated:
+      prune: true      # remove do cluster o que saiu do Git
+      selfHeal: true   # desfaz alterações manuais no cluster
+    syncOptions:
+      - CreateNamespace=true
