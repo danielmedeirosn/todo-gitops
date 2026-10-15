@@ -1,0 +1,54 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: todo-api-slo
+spec:
+  groups:
+    - name: todo-api-sli
+      rules:
+        - record: todo:sli_errors:ratio_rate5m
+          expr: |
+            sum(rate(http_request_duration_seconds_count{namespace="todo",route!~"/healthz|/readyz|/metrics",status=~"5.."}[5m]))
+            / sum(rate(http_request_duration_seconds_count{namespace="todo",route!~"/healthz|/readyz|/metrics"}[5m]))
+        - record: todo:sli_errors:ratio_rate30m
+          expr: |
+            sum(rate(http_request_duration_seconds_count{namespace="todo",route!~"/healthz|/readyz|/metrics",status=~"5.."}[30m]))
+            / sum(rate(http_request_duration_seconds_count{namespace="todo",route!~"/healthz|/readyz|/metrics"}[30m]))
+        - record: todo:sli_errors:ratio_rate1h
+          expr: |
+            sum(rate(http_request_duration_seconds_count{namespace="todo",route!~"/healthz|/readyz|/metrics",status=~"5.."}[1h]))
+            / sum(rate(http_request_duration_seconds_count{namespace="todo",route!~"/healthz|/readyz|/metrics"}[1h]))
+        - record: todo:sli_errors:ratio_rate6h
+          expr: |
+            sum(rate(http_request_duration_seconds_count{namespace="todo",route!~"/healthz|/readyz|/metrics",status=~"5.."}[6h]))
+            / sum(rate(http_request_duration_seconds_count{namespace="todo",route!~"/healthz|/readyz|/metrics"}[6h]))
+        - record: todo:latency_p95:5m
+          expr: |
+            histogram_quantile(0.95, sum by (le) (
+              rate(http_request_duration_seconds_bucket{namespace="todo",route!~"/healthz|/readyz|/metrics"}[5m])))
+
+    - name: todo-api-alerts
+      rules:
+        - alert: TodoApiBudgetQueimaRapida
+          expr: |
+            todo:sli_errors:ratio_rate1h > (14.4 * 0.005)
+            and todo:sli_errors:ratio_rate5m > (14.4 * 0.005)
+          for: 2m
+          labels: { severity: critical }
+          annotations:
+            summary: "todo-api consome o error budget 14x acima do normal"
+            runbook: "Verificar /readyz, logs no Loki e o último deploy no Argo CD"
+        - alert: TodoApiBudgetQueimaLenta
+          expr: |
+            todo:sli_errors:ratio_rate6h > (6 * 0.005)
+            and todo:sli_errors:ratio_rate30m > (6 * 0.005)
+          for: 15m
+          labels: { severity: warning }
+          annotations:
+            summary: "todo-api consome o error budget 6x acima do normal"
+        - alert: TodoApiLatenciaAlta
+          expr: todo:latency_p95:5m > 0.3
+          for: 10m
+          labels: { severity: warning }
+          annotations:
+            summary: "p95 da todo-api acima de 300 ms"
